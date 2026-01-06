@@ -16,6 +16,7 @@ export interface Subservice {
   tooltip: string | null;
   color: string;
   weight: number;
+  link: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;

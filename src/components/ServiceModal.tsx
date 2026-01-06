@@ -156,8 +156,14 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
       const lines = splitTextIntoLines(sub.name, 28); // More chars per line to fit on 2 lines max
       const lineHeight = 14;
 
-      return (
-        <g key={idx}>
+      const handleSegmentClick = () => {
+        if (sub.link) {
+          window.open(sub.link, '_blank', 'noopener,noreferrer');
+        }
+      };
+
+      const segmentContent = (
+        <>
           {/* Gradient definition for this segment */}
           <defs>
             <linearGradient
@@ -176,7 +182,8 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
             fill={`url(#modal-gradient-${idx})`}
             stroke="white"
             strokeWidth="2"
-            className="transition-opacity hover:opacity-90 cursor-pointer"
+            className={`transition-opacity hover:opacity-80 ${sub.link ? 'cursor-pointer' : 'cursor-default'}`}
+            onClick={handleSegmentClick}
           />
           {/* Radial text */}
           <text
@@ -202,6 +209,12 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
               );
             })}
           </text>
+        </>
+      );
+
+      return (
+        <g key={idx}>
+          {segmentContent}
         </g>
       );
     });

@@ -52,6 +52,13 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_services_sort_order ON services(sort_order);
     CREATE INDEX IF NOT EXISTS idx_subservices_sort_order ON subservices(sort_order);
   `);
+
+  // Migration: Add link column to subservices if it doesn't exist
+  const columns = db.prepare("PRAGMA table_info(subservices)").all() as { name: string }[];
+  const hasLinkColumn = columns.some(col => col.name === 'link');
+  if (!hasLinkColumn) {
+    db.exec('ALTER TABLE subservices ADD COLUMN link TEXT');
+  }
 }
 
 // Services CRUD
@@ -103,10 +110,10 @@ export function getSubserviceById(id: number): Subservice | undefined {
 
 export function createSubservice(data: Omit<Subservice, 'id' | 'created_at' | 'updated_at'>): Subservice {
   const stmt = db.prepare(`
-    INSERT INTO subservices (service_id, name, tooltip, color, weight, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO subservices (service_id, name, tooltip, color, weight, link, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  const result = stmt.run(data.service_id, data.name, data.tooltip, data.color, data.weight, data.sort_order);
+  const result = stmt.run(data.service_id, data.name, data.tooltip, data.color, data.weight, data.link, data.sort_order);
   return getSubserviceById(result.lastInsertRowid as number)!;
 }
 
@@ -160,6 +167,7 @@ export function replaceAllData(services: Omit<ServiceWithSubservices, 'id' | 'cr
           tooltip: sub.tooltip,
           color: sub.color,
           weight: sub.weight,
+          link: sub.link ?? null,
           sort_order: sub.sort_order ?? subIdx
         });
       });

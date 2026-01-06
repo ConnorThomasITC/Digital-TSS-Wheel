@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { service_id, name, tooltip, color, weight, sort_order } = body;
+    const { service_id, name, tooltip, color, weight, link, sort_order } = body;
 
     if (!service_id || !name || !color) {
       return NextResponse.json({ error: 'service_id, name, and color are required' }, { status: 400 });
@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
       tooltip: tooltip || null,
       color,
       weight: weight ?? 10,
+      link: link || null,
       sort_order: sort_order ?? 0
     });
 

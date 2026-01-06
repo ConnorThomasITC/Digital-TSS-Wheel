@@ -221,6 +221,7 @@ export default function AdminDashboard({ initialServices, editKey: initialKey }:
       tooltip: '',
       color: '#9CA3AF',
       weight: 10,
+      link: null,
       sort_order: 0,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -662,6 +663,13 @@ export default function AdminDashboard({ initialServices, editKey: initialKey }:
                                       value={sub.tooltip || ''}
                                       onChange={(e) => updateSubservice(service.id, sub.id, { tooltip: e.target.value })}
                                       placeholder="Tooltip"
+                                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <input
+                                      type="url"
+                                      value={sub.link || ''}
+                                      onChange={(e) => updateSubservice(service.id, sub.id, { link: e.target.value || null })}
+                                      placeholder="Link URL (opens in new tab)"
                                       className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                     <div className="flex items-center gap-2">

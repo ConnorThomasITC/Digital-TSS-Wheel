@@ -1,36 +1,122 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import type { ServiceWithSubservices } from '@/lib/types';
+import { useState, useEffect, useMemo } from 'react';
+import type { ServiceWithSubservices, WheelSettings } from '@/lib/types';
+import { DEFAULT_WHEEL_SETTINGS } from '@/lib/types';
 import ServiceModal from './ServiceModal';
 import Tooltip from './Tooltip';
 
 interface WheelProps {
   services: ServiceWithSubservices[];
+  settings?: Partial<WheelSettings>;
 }
 
-export default function Wheel({ services }: WheelProps) {
-  const [selectedService, setSelectedService] = useState<ServiceWithSubservices | null>(null);
-  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
+export default function Wheel({ services, settings: customSettings }: WheelProps) {
+  const [selectedService, setSelectedService] = useState<{
+    service: ServiceWithSubservices;
+    angle: number;
+    index: number;
+  } | null>(null);
+  const [tooltip, setTooltip] = useState<{ heading: string; text: string; color: string; x: number; y: number } | null>(null);
   const [touchedService, setTouchedService] = useState<number | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
-  const centerX = 250;
-  const centerY = 250;
-  const innerRadius = 80;
-  const outerRadius = 200;
+  // Ensure component only renders fully on client
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Merge custom settings with defaults
+  const settings = useMemo(() => ({
+    ...DEFAULT_WHEEL_SETTINGS,
+    ...customSettings,
+  }), [customSettings]);
+
+  // Split long service names into multiple lines
+  const splitTextIntoLines = (text: string): string[] => {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      if (currentLine.length === 0) {
+        currentLine = word;
+      } else if ((currentLine + ' ' + word).length <= settings.maxCharsPerLine) {
+        currentLine += ' ' + word;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines;
+  };
+
+  // Calculate wheel dimensions dynamically based on font size
+  const dimensions = useMemo(() => {
+    // Base sizing - scale with font size
+    const baseFontSize = 14;
+    const scaleFactor = settings.fontSize / baseFontSize;
+
+    // Find the longest service name to determine needed space
+    const maxLines = Math.max(...services.map(s => {
+      const words = s.name.split(' ');
+      let lines = 1;
+      let currentLine = '';
+      for (const word of words) {
+        if (currentLine.length === 0) {
+          currentLine = word;
+        } else if ((currentLine + ' ' + word).length <= settings.maxCharsPerLine) {
+          currentLine += ' ' + word;
+        } else {
+          lines++;
+          currentLine = word;
+        }
+      }
+      return lines;
+    }), 1);
+
+    // Calculate segment depth needed for text (including padding)
+    const textHeight = maxLines * settings.lineHeight;
+    const totalPadding = settings.segmentPaddingInner + settings.segmentPaddingOuter;
+    const minSegmentDepth = Math.max((textHeight + totalPadding) * scaleFactor, 120);
+
+    const innerRadius = 90 * scaleFactor;
+    const outerRadius = innerRadius + minSegmentDepth;
+    const viewboxSize = (outerRadius + 40) * 2; // 40px margin
+    const center = viewboxSize / 2;
+
+    return {
+      viewboxSize,
+      center,
+      innerRadius,
+      outerRadius,
+    };
+  }, [settings.fontSize, settings.lineHeight, settings.maxCharsPerLine, settings.segmentPaddingInner, settings.segmentPaddingOuter, services]);
+
+  const { viewboxSize, center, innerRadius, outerRadius } = dimensions;
+  const centerX = center;
+  const centerY = center;
 
   const totalServices = services.length;
   const anglePerService = 360 / totalServices;
 
-  const handleServiceClick = (service: ServiceWithSubservices) => {
-    setSelectedService(service);
+  const handleServiceClick = (service: ServiceWithSubservices, startAngle: number, index: number) => {
+    setSelectedService({ service, angle: startAngle + anglePerService / 2, index });
     setTooltip(null);
   };
 
   const handleServiceHover = (e: React.MouseEvent, service: ServiceWithSubservices) => {
-    if (service.tooltip) {
+    // Show tooltip with service name as heading and description as text
+    const text = service.description || service.tooltip || '';
+    if (text || service.name) {
       setTooltip({
-        text: service.tooltip,
+        heading: service.name,
+        text: text,
+        color: service.color,
         x: e.clientX + 10,
         y: e.clientY + 10,
       });
@@ -42,16 +128,15 @@ export default function Wheel({ services }: WheelProps) {
   };
 
   // Mobile touch handling
-  const handleTouchStart = (service: ServiceWithSubservices) => {
+  const handleTouchStart = (service: ServiceWithSubservices, startAngle: number, index: number) => {
     if (touchedService === service.id) {
       // Second tap - open modal
-      setSelectedService(service);
+      setSelectedService({ service, angle: startAngle + anglePerService / 2, index });
       setTouchedService(null);
       setTooltip(null);
     } else {
       // First tap - show tooltip
       setTouchedService(service.id);
-      // Tooltip will be shown via state, positioned at center
     }
   };
 
@@ -89,111 +174,195 @@ export default function Wheel({ services }: WheelProps) {
     ].join(' ');
   };
 
-  const getTextPosition = (startAngle: number) => {
-    const midAngle = startAngle + anglePerService / 2;
-    const textRadius = (innerRadius + outerRadius) / 2;
-    const rad = (midAngle * Math.PI) / 180;
-
-    return {
-      x: centerX + textRadius * Math.cos(rad),
-      y: centerY + textRadius * Math.sin(rad),
-      rotation: midAngle + 90,
-    };
+  // Helper to lighten a hex color
+  const lightenColor = (hex: string, percent: number): string => {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.min(255, Math.floor((num >> 16) + (255 - (num >> 16)) * percent));
+    const g = Math.min(255, Math.floor(((num >> 8) & 0x00FF) + (255 - ((num >> 8) & 0x00FF)) * percent));
+    const b = Math.min(255, Math.floor((num & 0x0000FF) + (255 - (num & 0x0000FF)) * percent));
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
   };
+
+  // Don't render until mounted to prevent hydration mismatch
+  if (!isMounted) {
+    return (
+      <div
+        className="flex items-center justify-center w-full min-h-screen p-4"
+        style={{ backgroundColor: settings.backgroundColor }}
+      />
+    );
+  }
 
   return (
     <>
-      <div className="flex items-center justify-center w-full min-h-screen p-4">
+      <div
+        className="flex items-center justify-center w-full min-h-screen p-4"
+        style={{ backgroundColor: settings.backgroundColor }}
+      >
         <svg
-          viewBox="0 0 500 500"
+          viewBox={`0 0 ${viewboxSize} ${viewboxSize}`}
           className="w-full max-w-2xl h-auto"
           style={{ touchAction: 'manipulation' }}
         >
-          {/* Center circle */}
+          {/* Gradient definitions for each service */}
+          <defs>
+            {services.map((service, index) => {
+              const startAngle = -90 + index * anglePerService;
+              const midAngle = startAngle + anglePerService / 2;
+              const midRad = (midAngle * Math.PI) / 180;
+
+              // Calculate gradient direction (from center outward along the segment)
+              const x1 = 50 - Math.cos(midRad) * 50;
+              const y1 = 50 - Math.sin(midRad) * 50;
+              const x2 = 50 + Math.cos(midRad) * 50;
+              const y2 = 50 + Math.sin(midRad) * 50;
+
+              return (
+                <linearGradient
+                  key={`gradient-${service.id}`}
+                  id={`gradient-${service.id}`}
+                  x1={`${x1}%`}
+                  y1={`${y1}%`}
+                  x2={`${x2}%`}
+                  y2={`${y2}%`}
+                >
+                  <stop offset="0%" stopColor={lightenColor(service.color, 0.12)} />
+                  <stop offset="100%" stopColor={service.color} />
+                </linearGradient>
+              );
+            })}
+          </defs>
+
+          {/* Center circle - dark background */}
           <circle
             cx={centerX}
             cy={centerY}
             r={innerRadius}
-            fill="white"
-            stroke="#e5e7eb"
-            strokeWidth="2"
+            fill={settings.backgroundColor}
+            stroke="#333"
+            strokeWidth={settings.strokeWidth}
           />
 
           {/* Service segments */}
           {services.map((service, index) => {
             const startAngle = -90 + index * anglePerService;
-            const endAngle = startAngle + anglePerService;
-            const path = createArcPath(startAngle, endAngle);
-            const textPos = getTextPosition(startAngle);
+            const path = createArcPath(startAngle, startAngle + anglePerService);
 
             return (
               <g key={service.id}>
                 <path
                   d={path}
-                  fill={service.color}
+                  fill={`url(#gradient-${service.id})`}
                   stroke="white"
-                  strokeWidth="2"
-                  className="cursor-pointer transition-opacity hover:opacity-80"
-                  onClick={() => handleServiceClick(service)}
+                  strokeWidth={2}
+                  className="cursor-pointer transition-opacity hover:opacity-90"
+                  onClick={() => handleServiceClick(service, startAngle, index)}
                   onMouseEnter={(e) => handleServiceHover(e, service)}
                   onMouseMove={(e) => handleServiceHover(e, service)}
                   onMouseLeave={handleServiceLeave}
-                  onTouchStart={() => handleTouchStart(service)}
+                  onTouchStart={() => handleTouchStart(service, startAngle, index)}
                   role="button"
                   aria-label={`${service.name}: ${service.tooltip || 'Click for details'}`}
                 />
-                <text
-                  x={textPos.x}
-                  y={textPos.y}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill="white"
-                  fontSize="14"
-                  fontWeight="600"
-                  className="pointer-events-none select-none"
-                  transform={`rotate(${textPos.rotation}, ${textPos.x}, ${textPos.y})`}
-                >
-                  {service.name}
-                </text>
+                {/* Radial text - runs from inner to outer edge */}
+                {(() => {
+                  const lines = splitTextIntoLines(service.name);
+                  const midAngle = startAngle + anglePerService / 2;
+                  const rad = (midAngle * Math.PI) / 180;
+
+                  // Calculate the available space for text (with padding)
+                  const textInnerBound = innerRadius + settings.segmentPaddingInner;
+                  const textOuterBound = outerRadius - settings.segmentPaddingOuter;
+
+                  // Center the text block within the available padded area
+                  const textCenterRadius = (textInnerBound + textOuterBound) / 2;
+                  const textCenterX = centerX + textCenterRadius * Math.cos(rad);
+                  const textCenterY = centerY + textCenterRadius * Math.sin(rad);
+
+                  // Determine rotation - flip text on left side
+                  let rotation = midAngle;
+                  let lineOffset = 1; // Normal direction for right side
+                  if (midAngle > 90 && midAngle < 270) {
+                    rotation = midAngle + 180;
+                    lineOffset = -1; // Reverse direction for left side
+                  }
+
+                  return (
+                    <text
+                      fill={settings.textColor}
+                      fontSize={settings.fontSize}
+                      fontWeight={settings.fontWeight}
+                      fontFamily="Poppins, sans-serif"
+                      textAnchor="middle"
+                      transform={`rotate(${rotation}, ${textCenterX}, ${textCenterY})`}
+                      className="pointer-events-none select-none"
+                    >
+                      {lines.map((line, i) => {
+                        // Position each line relative to the center
+                        const lineY = textCenterY + (i - (lines.length - 1) / 2) * settings.lineHeight * lineOffset;
+                        return (
+                          <tspan
+                            key={i}
+                            x={textCenterX}
+                            y={lineY}
+                            dominantBaseline="middle"
+                          >
+                            {line}
+                          </tspan>
+                        );
+                      })}
+                    </text>
+                  );
+                })()}
               </g>
             );
           })}
 
-          {/* Center text */}
+          {/* Center content - ITC logo and Total Support Strategy */}
+          <image
+            href="https://itcservice.co.uk/wp-content/uploads/2022/06/compresssed-ITC-logo.png"
+            x={centerX - innerRadius * 0.55}
+            y={centerY - innerRadius * 0.5}
+            width={innerRadius * 1.1}
+            height={innerRadius * 0.55}
+            preserveAspectRatio="xMidYMid meet"
+            className="pointer-events-none"
+          />
           <text
             x={centerX}
-            y={centerY}
+            y={centerY + innerRadius * 0.3}
             textAnchor="middle"
             dominantBaseline="middle"
-            fontSize="16"
-            fontWeight="700"
-            fill="#333"
+            fontSize={innerRadius * 0.14}
+            fontFamily="Poppins, sans-serif"
+            fontWeight="600"
+            letterSpacing="0.5"
+            fill={settings.textColor}
             className="pointer-events-none select-none"
           >
-            TSS
-          </text>
-          <text
-            x={centerX}
-            y={centerY + 20}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize="12"
-            fill="#666"
-            className="pointer-events-none select-none"
-          >
-            Services
+            Total Support Strategy
           </text>
         </svg>
       </div>
 
-      <ServiceModal service={selectedService} onClose={() => setSelectedService(null)} />
-
-      <Tooltip
-        text={tooltip?.text || (touchedService !== null ? services.find(s => s.id === touchedService)?.tooltip || '' : '')}
-        x={tooltip?.x || window.innerWidth / 2}
-        y={tooltip?.y || window.innerHeight / 2}
-        visible={!!tooltip || touchedService !== null}
+      <ServiceModal
+        service={selectedService?.service || null}
+        serviceColor={selectedService?.service.color || '#000'}
+        angle={selectedService?.angle || 0}
+        totalServices={totalServices}
+        onClose={() => setSelectedService(null)}
       />
+
+      {isMounted && (
+        <Tooltip
+          heading={tooltip?.heading || (touchedService !== null ? services.find(s => s.id === touchedService)?.name || '' : '')}
+          text={tooltip?.text || (touchedService !== null ? (services.find(s => s.id === touchedService)?.description || services.find(s => s.id === touchedService)?.tooltip || '') : '')}
+          color={tooltip?.color || (touchedService !== null ? services.find(s => s.id === touchedService)?.color : undefined)}
+          x={tooltip?.x || window.innerWidth / 2}
+          y={tooltip?.y || window.innerHeight / 2}
+          visible={!!tooltip || touchedService !== null}
+        />
+      )}
     </>
   );
 }

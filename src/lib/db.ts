@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import type { Service, Subservice, ServiceWithSubservices } from './types';
+import type { Service, Subservice, ServiceWithSubservices, WheelSettings } from './types';
+import { DEFAULT_WHEEL_SETTINGS } from './types';
 
 const dbPath = process.env.DATABASE_PATH || './data/tss-wheel.db';
 const dbDir = path.dirname(dbPath);
@@ -186,6 +187,28 @@ export function reorderSubservices(ids: number[]): void {
     });
   });
   transaction();
+}
+
+// Settings CRUD
+export function getWheelSettings(): WheelSettings {
+  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get('wheel_settings') as { value: string } | undefined;
+  if (row) {
+    try {
+      return { ...DEFAULT_WHEEL_SETTINGS, ...JSON.parse(row.value) };
+    } catch {
+      return DEFAULT_WHEEL_SETTINGS;
+    }
+  }
+  return DEFAULT_WHEEL_SETTINGS;
+}
+
+export function saveWheelSettings(settings: WheelSettings): void {
+  const stmt = db.prepare(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES ('wheel_settings', ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `);
+  stmt.run(JSON.stringify(settings));
 }
 
 export { db };

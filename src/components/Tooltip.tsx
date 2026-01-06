@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 
 interface TooltipProps {
+  heading?: string;
   text: string;
   x: number;
   y: number;
   visible: boolean;
+  color?: string;
 }
 
-export default function Tooltip({ text, x, y, visible }: TooltipProps) {
+export default function Tooltip({ heading, text, x, y, visible, color }: TooltipProps) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
 
@@ -43,19 +45,31 @@ export default function Tooltip({ text, x, y, visible }: TooltipProps) {
     setPosition({ x: adjustedX, y: adjustedY });
   }, [x, y, visible]);
 
-  if (!visible || !text) return null;
+  if (!visible || (!text && !heading)) return null;
 
   return (
     <div
       ref={tooltipRef}
-      className="fixed z-50 px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-lg pointer-events-none animate-fade-in"
+      className="fixed z-50 px-4 py-3 text-white bg-gray-900 rounded-xl shadow-2xl pointer-events-none animate-fade-in"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        maxWidth: '250px',
+        maxWidth: '420px',
       }}
     >
-      {text}
+      {heading && (
+        <h3
+          className="text-sm font-bold mb-1"
+          style={{ color: color || '#fff' }}
+        >
+          {heading}
+        </h3>
+      )}
+      {text && (
+        <p className="text-xs text-gray-300 leading-relaxed">
+          {text}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,0 +1,42 @@
+{
+  "name": "tss-wheel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "npm run db:push && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "node src/lib/init-db.js",
+    "db:seed": "node src/lib/seed.js"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-popover": "^1.0.7",
+    "@radix-ui/react-slot": "^1.0.2",
+    "better-sqlite3": "^9.2.2",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "next": "14.1.0",
+    "react": "^18.2.0",
+    "react-color": "^2.19.3",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^2.2.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-color": "^3.0.11",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.1.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5"
+  }
+}

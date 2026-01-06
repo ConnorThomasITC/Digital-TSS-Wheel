@@ -1,0 +1,19 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# JSON files should use LF
+*.json text eol=lf
+
+# JavaScript/TypeScript files should use LF
+*.js text eol=lf
+*.ts text eol=lf
+*.jsx text eol=lf
+*.tsx text eol=lf
+
+# CSS files should use LF
+*.css text eol=lf
+
+# Database files are binary
+*.db binary
+*.db-wal binary
+*.db-shm binary

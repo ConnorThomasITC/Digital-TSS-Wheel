@@ -226,7 +226,7 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
                   x2={`${x2}%`}
                   y2={`${y2}%`}
                 >
-                  <stop offset="0%" stopColor={lightenColor(service.color, 0.12)} />
+                  <stop offset="0%" stopColor={lightenColor(service.color, settings.gradientLightness)} />
                   <stop offset="100%" stopColor={service.color} />
                 </linearGradient>
               );

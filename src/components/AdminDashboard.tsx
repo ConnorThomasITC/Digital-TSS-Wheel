@@ -449,6 +449,19 @@ export default function AdminDashboard({ initialServices, editKey: initialKey }:
                 <h3 className="font-semibold text-gray-700 border-b pb-2">Style</h3>
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">
+                    Gradient Lightness: {Math.round((settings.gradientLightness ?? 0.08) * 100)}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="30"
+                    value={Math.round((settings.gradientLightness ?? 0.08) * 100)}
+                    onChange={(e) => updateSettings({ ...settings, gradientLightness: parseInt(e.target.value) / 100 })}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">
                     Stroke Width: {settings.strokeWidth}px
                   </label>
                   <input

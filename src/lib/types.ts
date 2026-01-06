@@ -39,6 +39,7 @@ export interface WheelSettings {
   centerSubtitleSize: number;
   segmentPaddingInner: number;
   segmentPaddingOuter: number;
+  gradientLightness: number;
 }
 
 export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
@@ -54,6 +55,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   centerSubtitleSize: 10,
   segmentPaddingInner: 15,
   segmentPaddingOuter: 15,
+  gradientLightness: 0.08,
 };
 
 export interface ConfigData {

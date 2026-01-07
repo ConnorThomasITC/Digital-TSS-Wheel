@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(ls:*)",
+      "Bash(cd:*)",
+      "Bash(npm run db:seed)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(sqlite3:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

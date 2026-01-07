@@ -102,10 +102,30 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
   const centerY = center;
 
   const totalServices = services.length;
-  const anglePerService = 360 / totalServices;
 
-  const handleServiceClick = (service: ServiceWithSubservices, startAngle: number, index: number) => {
-    setSelectedService({ service, angle: startAngle + anglePerService / 2, index });
+  // Calculate total weight for weighted segment sizing
+  const totalWeight = useMemo(() =>
+    services.reduce((sum, s) => sum + (s.weight || 10), 0),
+    [services]
+  );
+
+  // Calculate angle for each service based on its weight
+  const getServiceAngle = (service: ServiceWithSubservices) => {
+    const weight = service.weight || 10;
+    return (weight / totalWeight) * 360;
+  };
+
+  // Calculate start angle for a service at given index
+  const getStartAngle = (index: number) => {
+    let angle = -90; // Start from top
+    for (let i = 0; i < index; i++) {
+      angle += getServiceAngle(services[i]);
+    }
+    return angle;
+  };
+
+  const handleServiceClick = (service: ServiceWithSubservices, startAngle: number, serviceAngle: number, index: number) => {
+    setSelectedService({ service, angle: startAngle + serviceAngle / 2, index });
     setTooltip(null);
   };
 
@@ -128,10 +148,10 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
   };
 
   // Mobile touch handling
-  const handleTouchStart = (service: ServiceWithSubservices, startAngle: number, index: number) => {
+  const handleTouchStart = (service: ServiceWithSubservices, startAngle: number, serviceAngle: number, index: number) => {
     if (touchedService === service.id) {
       // Second tap - open modal
-      setSelectedService({ service, angle: startAngle + anglePerService / 2, index });
+      setSelectedService({ service, angle: startAngle + serviceAngle / 2, index });
       setTouchedService(null);
       setTooltip(null);
     } else {
@@ -149,7 +169,7 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
     }
   }, [touchedService]);
 
-  const createArcPath = (startAngle: number, endAngle: number) => {
+  const createArcPath = (startAngle: number, endAngle: number, segmentAngle: number) => {
     const startRad = (startAngle * Math.PI) / 180;
     const endRad = (endAngle * Math.PI) / 180;
 
@@ -162,7 +182,7 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
     const x4 = centerX + innerRadius * Math.cos(endRad);
     const y4 = centerY + innerRadius * Math.sin(endRad);
 
-    const largeArc = anglePerService > 180 ? 1 : 0;
+    const largeArc = segmentAngle > 180 ? 1 : 0;
 
     return [
       `M ${x1} ${y1}`,
@@ -207,8 +227,9 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
           {/* Gradient definitions for each service */}
           <defs>
             {services.map((service, index) => {
-              const startAngle = -90 + index * anglePerService;
-              const midAngle = startAngle + anglePerService / 2;
+              const startAngle = getStartAngle(index);
+              const serviceAngle = getServiceAngle(service);
+              const midAngle = startAngle + serviceAngle / 2;
               const midRad = (midAngle * Math.PI) / 180;
 
               // Calculate gradient direction (from center outward along the segment)
@@ -245,8 +266,9 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
 
           {/* Service segments */}
           {services.map((service, index) => {
-            const startAngle = -90 + index * anglePerService;
-            const path = createArcPath(startAngle, startAngle + anglePerService);
+            const startAngle = getStartAngle(index);
+            const serviceAngle = getServiceAngle(service);
+            const path = createArcPath(startAngle, startAngle + serviceAngle, serviceAngle);
 
             return (
               <g key={service.id}>
@@ -256,18 +278,18 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
                   stroke="white"
                   strokeWidth={2}
                   className="cursor-pointer transition-opacity hover:opacity-90"
-                  onClick={() => handleServiceClick(service, startAngle, index)}
+                  onClick={() => handleServiceClick(service, startAngle, serviceAngle, index)}
                   onMouseEnter={(e) => handleServiceHover(e, service)}
                   onMouseMove={(e) => handleServiceHover(e, service)}
                   onMouseLeave={handleServiceLeave}
-                  onTouchStart={() => handleTouchStart(service, startAngle, index)}
+                  onTouchStart={() => handleTouchStart(service, startAngle, serviceAngle, index)}
                   role="button"
                   aria-label={`${service.name}: ${service.tooltip || 'Click for details'}`}
                 />
                 {/* Radial text - runs from inner to outer edge */}
                 {(() => {
                   const lines = splitTextIntoLines(service.name);
-                  const midAngle = startAngle + anglePerService / 2;
+                  const midAngle = startAngle + serviceAngle / 2;
                   const rad = (midAngle * Math.PI) / 180;
 
                   // Calculate the available space for text (with padding)
@@ -280,11 +302,13 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
                   const textCenterY = centerY + textCenterRadius * Math.sin(rad);
 
                   // Determine rotation - flip text on left side
+                  // Normalize angle to 0-360 range for consistent left/right detection
+                  // Use 100° and 260° as thresholds to give more leeway near horizontal
+                  const normalizedMidAngle = ((midAngle % 360) + 360) % 360;
                   let rotation = midAngle;
-                  let lineOffset = 1; // Normal direction for right side
-                  if (midAngle > 90 && midAngle < 270) {
+                  const isLeftSide = normalizedMidAngle > 100 && normalizedMidAngle < 260;
+                  if (isLeftSide) {
                     rotation = midAngle + 180;
-                    lineOffset = -1; // Reverse direction for left side
                   }
 
                   return (
@@ -299,7 +323,10 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
                     >
                       {lines.map((line, i) => {
                         // Position each line relative to the center
-                        const lineY = textCenterY + (i - (lines.length - 1) / 2) * settings.lineHeight * lineOffset;
+                        // On the left side (rotated 180°), we need to flip the Y offset direction
+                        // so that line[0] appears at the inner edge (closer to center) in both cases
+                        const yOffset = (i - (lines.length - 1) / 2) * settings.lineHeight;
+                        const lineY = textCenterY + (isLeftSide ? -yOffset : yOffset);
                         return (
                           <tspan
                             key={i}
@@ -330,17 +357,27 @@ export default function Wheel({ services, settings: customSettings }: WheelProps
           />
           <text
             x={centerX}
-            y={centerY + innerRadius * 0.3}
             textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={innerRadius * 0.14}
             fontFamily="Poppins, sans-serif"
             fontWeight="600"
             letterSpacing="0.5"
             fill={settings.textColor}
             className="pointer-events-none select-none"
           >
-            Total Support Strategy
+            <tspan
+              x={centerX}
+              y={centerY + innerRadius * 0.22}
+              fontSize={innerRadius * 0.16}
+            >
+              Total Support
+            </tspan>
+            <tspan
+              x={centerX}
+              y={centerY + innerRadius * 0.45}
+              fontSize={innerRadius * 0.16}
+            >
+              Strategy
+            </tspan>
           </text>
         </svg>
       </div>

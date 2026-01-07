@@ -54,10 +54,17 @@ export function initDb() {
   `);
 
   // Migration: Add link column to subservices if it doesn't exist
-  const columns = db.prepare("PRAGMA table_info(subservices)").all() as { name: string }[];
-  const hasLinkColumn = columns.some(col => col.name === 'link');
+  const subColumns = db.prepare("PRAGMA table_info(subservices)").all() as { name: string }[];
+  const hasLinkColumn = subColumns.some(col => col.name === 'link');
   if (!hasLinkColumn) {
     db.exec('ALTER TABLE subservices ADD COLUMN link TEXT');
+  }
+
+  // Migration: Add weight column to services if it doesn't exist
+  const serviceColumns = db.prepare("PRAGMA table_info(services)").all() as { name: string }[];
+  const hasWeightColumn = serviceColumns.some(col => col.name === 'weight');
+  if (!hasWeightColumn) {
+    db.exec('ALTER TABLE services ADD COLUMN weight INTEGER NOT NULL DEFAULT 10');
   }
 }
 
@@ -72,10 +79,10 @@ export function getServiceById(id: number): Service | undefined {
 
 export function createService(data: Omit<Service, 'id' | 'created_at' | 'updated_at'>): Service {
   const stmt = db.prepare(`
-    INSERT INTO services (name, tooltip, description, color, sort_order)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO services (name, tooltip, description, color, weight, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
-  const result = stmt.run(data.name, data.tooltip, data.description, data.color, data.sort_order);
+  const result = stmt.run(data.name, data.tooltip, data.description, data.color, data.weight ?? 10, data.sort_order);
   return getServiceById(result.lastInsertRowid as number)!;
 }
 
@@ -157,6 +164,7 @@ export function replaceAllData(services: Omit<ServiceWithSubservices, 'id' | 'cr
         tooltip: service.tooltip,
         description: service.description,
         color: service.color,
+        weight: service.weight ?? 10,
         sort_order: service.sort_order ?? idx
       });
 

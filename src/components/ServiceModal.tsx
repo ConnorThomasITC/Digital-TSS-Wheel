@@ -14,19 +14,61 @@ interface ServiceModalProps {
 export default function ServiceModal({ service, serviceColor, angle, totalServices, onClose }: ServiceModalProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [visibleSegments, setVisibleSegments] = useState<number[]>([]);
 
   useEffect(() => {
     if (service) {
       setIsAnimating(true);
+      setVisibleSegments([]);
       requestAnimationFrame(() => {
         setIsVisible(true);
       });
     } else {
       setIsVisible(false);
+      setVisibleSegments([]);
       const timer = setTimeout(() => setIsAnimating(false), 300);
       return () => clearTimeout(timer);
     }
   }, [service]);
+
+  // Normalize weights for subservices and sort by weight (highest first)
+  const normalizedSubservices: NormalizedSubservice[] = useMemo(() => {
+    if (!service?.subservices.length) return [];
+    const totalWeight = service.subservices.reduce((sum, sub) => sum + sub.weight, 0);
+    return service.subservices.map(sub => ({
+      ...sub,
+      normalizedWeight: totalWeight > 0 ? (sub.weight / totalWeight) * 100 : 0,
+      percentage: totalWeight > 0 ? (sub.weight / totalWeight) * 100 : 0,
+    }));
+  }, [service]);
+
+  // Get animation order (sorted by weight, highest first)
+  const animationOrder = useMemo(() => {
+    if (!normalizedSubservices.length) return [];
+    // Create array of indices sorted by weight descending
+    return [...normalizedSubservices]
+      .map((sub, idx) => ({ idx, weight: sub.weight }))
+      .sort((a, b) => b.weight - a.weight)
+      .map(item => item.idx);
+  }, [normalizedSubservices]);
+
+  // Stagger the segment animations
+  useEffect(() => {
+    if (!isVisible || !animationOrder.length) return;
+
+    const timers: NodeJS.Timeout[] = [];
+
+    animationOrder.forEach((segmentIdx, orderIdx) => {
+      const timer = setTimeout(() => {
+        setVisibleSegments(prev => [...prev, segmentIdx]);
+      }, 100 + orderIdx * 60); // Start after 100ms, then 60ms between each
+      timers.push(timer);
+    });
+
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+    };
+  }, [isVisible, animationOrder]);
 
   useEffect(() => {
     if (!service) return;
@@ -46,30 +88,47 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
     };
   }, [service, onClose]);
 
-  // Normalize weights for subservices
-  const normalizedSubservices: NormalizedSubservice[] = useMemo(() => {
-    if (!service?.subservices.length) return [];
-    const totalWeight = service.subservices.reduce((sum, sub) => sum + sub.weight, 0);
-    return service.subservices.map(sub => ({
-      ...sub,
-      normalizedWeight: totalWeight > 0 ? (sub.weight / totalWeight) * 100 : 0,
-      percentage: totalWeight > 0 ? (sub.weight / totalWeight) * 100 : 0,
-    }));
-  }, [service]);
-
-  if (!service && !isAnimating) return null;
-
   // SVG dimensions - center the wheel circle in the viewport
   const svgWidth = 900;
   const svgHeight = 700;
-  const centerX = svgWidth / 2; // Center the circle in the SVG
+  const centerX = svgWidth / 2;
   const centerY = svgHeight / 2;
-  const innerRadius = 90; // Same size as main wheel's inner radius
-  const outerRadius = 320; // Larger segments extending outward for longer text
+  const innerRadius = 90;
+  const outerRadius = 320;
 
   // Subservices fan out to the right (from -90 to +90 degrees = 180 degree arc)
-  const totalArcAngle = 180; // Half circle fanning to the right
-  const startAngleOffset = -90; // Start from top
+  const totalArcAngle = 180;
+  const startAngleOffset = -90;
+
+  // Calculate segment positions (needed for all segments regardless of visibility)
+  // This hook must be called before any early returns
+  const segmentData = useMemo(() => {
+    if (!normalizedSubservices.length) return [];
+
+    let currentAngle = startAngleOffset;
+
+    return normalizedSubservices.map((sub, idx) => {
+      const subAngle = (sub.percentage / 100) * totalArcAngle;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + subAngle;
+      currentAngle = endAngle;
+
+      const midAngle = (startAngle + endAngle) / 2;
+      const midRad = (midAngle * Math.PI) / 180;
+
+      return {
+        sub,
+        idx,
+        startAngle,
+        endAngle,
+        midAngle,
+        midRad,
+      };
+    });
+  }, [normalizedSubservices]);
+
+  // Early return after all hooks have been called
+  if (!service && !isAnimating) return null;
 
   // Helper to lighten a hex color
   const lightenColor = (hex: string, percent: number): string => {
@@ -122,38 +181,31 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
     return lines;
   };
 
-  // Create subservice segments fanning out to the right
+  // Create subservice segments with staggered animation
   const createSubserviceSegments = () => {
-    if (!normalizedSubservices.length) return null;
+    if (!segmentData.length) return null;
 
-    let currentAngle = startAngleOffset;
-
-    return normalizedSubservices.map((sub, idx) => {
-      const subAngle = (sub.percentage / 100) * totalArcAngle;
-      const startAngle = currentAngle;
-      const endAngle = currentAngle + subAngle;
-      currentAngle = endAngle;
-
+    return segmentData.map(({ sub, idx, startAngle, endAngle, midAngle, midRad }) => {
+      const isSegmentVisible = visibleSegments.includes(idx);
       const path = createSegmentPath(innerRadius, outerRadius, startAngle, endAngle);
-
-      // Calculate text position - radial text running from inner to outer
-      const midAngle = (startAngle + endAngle) / 2;
-      const midRad = (midAngle * Math.PI) / 180;
 
       // Position text in the center of the segment
       const textRadius = (innerRadius + outerRadius) / 2;
       const textCenterX = centerX + textRadius * Math.cos(midRad);
       const textCenterY = centerY + textRadius * Math.sin(midRad);
 
-      // Determine rotation - flip text on left side (but our segments are on the right)
+      // Determine rotation - flip text on left side
+      // Normalize angle to 0-360 range for consistent left/right detection
+      const normalizedMidAngle = ((midAngle % 360) + 360) % 360;
       let rotation = midAngle;
-      let lineOffset = 1;
-      if (midAngle > 90 && midAngle < 270) {
+      const isLeftSide = normalizedMidAngle > 90 && normalizedMidAngle < 270;
+      if (isLeftSide) {
         rotation = midAngle + 180;
-        lineOffset = -1;
       }
 
-      const lines = splitTextIntoLines(sub.name, 28); // More chars per line to fit on 2 lines max
+      const lines = splitTextIntoLines(sub.name, 28);
+      // Reverse line order for left side so text reads correctly
+      const displayLines = isLeftSide ? [...lines].reverse() : lines;
       const lineHeight = 14;
 
       const handleSegmentClick = () => {
@@ -162,9 +214,21 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
         }
       };
 
-      const segmentContent = (
-        <>
-          {/* Gradient definition for this segment */}
+      // Calculate transform origin for scale animation (from inner edge)
+      const innerEdgeX = centerX + innerRadius * Math.cos(midRad);
+      const innerEdgeY = centerY + innerRadius * Math.sin(midRad);
+
+      return (
+        <g
+          key={idx}
+          style={{
+            transformOrigin: `${innerEdgeX}px ${innerEdgeY}px`,
+            transform: isSegmentVisible ? 'scale(1)' : 'scale(0)',
+            opacity: isSegmentVisible ? 1 : 0,
+            transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out',
+          }}
+        >
+          {/* Gradient definition for this segment - uses parent service color */}
           <defs>
             <linearGradient
               id={`modal-gradient-${idx}`}
@@ -173,8 +237,8 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
               x2="100%"
               y2="0%"
             >
-              <stop offset="0%" stopColor={lightenColor(sub.color, 0.12)} />
-              <stop offset="100%" stopColor={sub.color} />
+              <stop offset="0%" stopColor={lightenColor(serviceColor, 0.12)} />
+              <stop offset="100%" stopColor={serviceColor} />
             </linearGradient>
           </defs>
           <path
@@ -182,7 +246,7 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
             fill={`url(#modal-gradient-${idx})`}
             stroke="white"
             strokeWidth="2"
-            className={`transition-opacity hover:opacity-80 ${sub.link ? 'cursor-pointer' : 'cursor-default'}`}
+            className={`transition-opacity duration-200 hover:opacity-80 ${sub.link ? 'cursor-pointer' : 'cursor-default'}`}
             onClick={handleSegmentClick}
           />
           {/* Radial text */}
@@ -194,9 +258,13 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
             textAnchor="middle"
             transform={`rotate(${rotation}, ${textCenterX}, ${textCenterY})`}
             className="pointer-events-none select-none"
+            style={{
+              opacity: isSegmentVisible ? 1 : 0,
+              transition: 'opacity 0.3s ease-out 0.1s',
+            }}
           >
-            {lines.map((line, i) => {
-              const lineY = textCenterY + (i - (lines.length - 1) / 2) * lineHeight * lineOffset;
+            {displayLines.map((line, i) => {
+              const lineY = textCenterY + (i - (displayLines.length - 1) / 2) * lineHeight;
               return (
                 <tspan
                   key={i}
@@ -209,12 +277,6 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
               );
             })}
           </text>
-        </>
-      );
-
-      return (
-        <g key={idx}>
-          {segmentContent}
         </g>
       );
     });
@@ -274,7 +336,7 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
                       <span
                         key={idx}
                         className="text-xs px-2 py-1 rounded-full text-white"
-                        style={{ backgroundColor: sub.color }}
+                        style={{ backgroundColor: serviceColor }}
                       >
                         {sub.name.length > 12 ? sub.name.substring(0, 12) + '...' : sub.name}
                       </span>
@@ -301,7 +363,7 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
                 className="w-full h-full"
                 style={{ filter: 'drop-shadow(0 25px 50px rgba(0,0,0,0.4))' }}
               >
-                {/* Subservice segments fanning to the right */}
+                {/* Subservice segments fanning out with staggered animation */}
                 {createSubserviceSegments()}
 
                 {/* Center circle - overlaps the "ITC Service" area visually */}

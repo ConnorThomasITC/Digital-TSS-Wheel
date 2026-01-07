@@ -169,6 +169,30 @@ export default function AdminDashboard({ initialServices, editKey: initialKey }:
     }
   };
 
+  const handleExportPng = async () => {
+    try {
+      showMessage('success', 'Generating PNG...');
+      const response = await fetch('/api/export-png?size=1200');
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `tss-wheel-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showMessage('success', 'PNG exported successfully');
+      } else {
+        showMessage('error', 'Failed to export PNG');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      showMessage('error', 'Export failed');
+    }
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -198,6 +222,7 @@ export default function AdminDashboard({ initialServices, editKey: initialKey }:
       tooltip: '',
       description: '',
       color: '#6B7280',
+      weight: 10,
       sort_order: services.length,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -321,6 +346,12 @@ export default function AdminDashboard({ initialServices, editKey: initialKey }:
               className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
             >
               Export JSON
+            </button>
+            <button
+              onClick={handleExportPng}
+              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+            >
+              Export PNG
             </button>
             <button
               onClick={handlePublish}
@@ -630,6 +661,35 @@ export default function AdminDashboard({ initialServices, editKey: initialKey }:
                           onChange={(color) => updateService(service.id, { color })}
                         />
 
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Weight (segment size): {service.weight || 10}
+                            </label>
+                            <button
+                              onClick={() => {
+                                const totalSubWeight = service.subservices.reduce((sum, sub) => sum + (sub.weight || 0), 0);
+                                updateService(service.id, { weight: totalSubWeight || 10 });
+                              }}
+                              className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded border border-gray-300"
+                              title="Sum of all subservice weights"
+                            >
+                              Calculate Weight
+                            </button>
+                          </div>
+                          <input
+                            type="range"
+                            min="1"
+                            max="300"
+                            value={service.weight || 10}
+                            onChange={(e) => updateService(service.id, { weight: parseInt(e.target.value) })}
+                            className="w-full"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Controls the relative size of this segment on the wheel
+                          </p>
+                        </div>
+
                         <div className="border-t pt-4 mt-4">
                           <div className="flex items-center justify-between mb-3">
                             <h3 className="font-semibold">Subservices</h3>
@@ -695,10 +755,6 @@ export default function AdminDashboard({ initialServices, editKey: initialKey }:
                                       />
                                       <span className="text-xs text-gray-500">Weight</span>
                                     </div>
-                                    <ColorPicker
-                                      color={sub.color}
-                                      onChange={(color) => updateSubservice(service.id, sub.id, { color })}
-                                    />
                                   </div>
                                 )}
                               </div>

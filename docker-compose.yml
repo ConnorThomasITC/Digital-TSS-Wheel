@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  tss-wheel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tss-wheel
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/tss-wheel.db
+      - EDIT_KEY=${EDIT_KEY:-change-this-secret-key}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    volumes:
+      # Persist the SQLite database outside the container
+      - tss-wheel-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/wheel"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  tss-wheel-data:
+    driver: local

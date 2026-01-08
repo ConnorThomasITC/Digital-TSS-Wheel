@@ -322,32 +322,9 @@ export default function ServiceModal({ service, serviceColor, angle, totalServic
                 {service?.name}
               </h2>
               {service?.description && (
-                <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                <p className="text-gray-600 text-sm leading-relaxed">
                   {service.description}
                 </p>
-              )}
-              {normalizedSubservices.length > 0 && (
-                <div className="mt-auto pt-4 border-t">
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    {normalizedSubservices.length} Services
-                  </h4>
-                  <div className="flex flex-wrap gap-1">
-                    {normalizedSubservices.slice(0, 6).map((sub, idx) => (
-                      <span
-                        key={idx}
-                        className="text-xs px-2 py-1 rounded-full text-white"
-                        style={{ backgroundColor: serviceColor }}
-                      >
-                        {sub.name.length > 12 ? sub.name.substring(0, 12) + '...' : sub.name}
-                      </span>
-                    ))}
-                    {normalizedSubservices.length > 6 && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-600">
-                        +{normalizedSubservices.length - 6} more
-                      </span>
-                    )}
-                  </div>
-                </div>
               )}
             </div>
 

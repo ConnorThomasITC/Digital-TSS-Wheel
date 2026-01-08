@@ -21,6 +21,7 @@ db.exec(`
     tooltip TEXT,
     description TEXT,
     color TEXT NOT NULL,
+    weight INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -33,6 +34,7 @@ db.exec(`
     tooltip TEXT,
     color TEXT NOT NULL,
     weight INTEGER NOT NULL DEFAULT 10,
+    link TEXT,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

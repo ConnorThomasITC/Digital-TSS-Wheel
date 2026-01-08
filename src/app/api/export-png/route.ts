@@ -190,7 +190,7 @@ export async function GET(request: NextRequest) {
       .png()
       .toBuffer();
 
-    return new NextResponse(pngBuffer, {
+    return new NextResponse(new Uint8Array(pngBuffer), {
       headers: {
         'Content-Type': 'image/png',
         'Content-Disposition': `attachment; filename="tss-wheel-${Date.now()}.png"`,
